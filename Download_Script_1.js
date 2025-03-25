@@ -1,104 +1,160 @@
-//
-Created on Tue Sep 4 12: 53: 35 2020
-
+/*
+Created on Tue Sep 4 12:53:35 2020
 @author: Erdos1729
-//
+*/
 
-    let pdfDocumentName = "Document";
-    let doc = "";
-
-    function generatePDF_DataFile (){
-        let imgTags = document.getElementsByTagName("img");
-        let checkURLString = "blob:https://drive.google.com/";
-        let validImgTagCounter = 0;
-        for (i = 0; i < imgTags.length; i++) {
-
-            if (imgTags[i].src.substring(0, checkURLString.length) === checkURLString){
-                validImgTagCounter = validImgTagCounter + 1;
-                //console.log(imgTags[i].src);
-                let img = imgTags[i];
-
-                let canvas = document.createElement('canvas');
-                let context = canvas.getContext("2d");
-                canvas.width = img.naturalWidth;
-                canvas.height = img.naturalHeight;
-                //console.log("Width: " + img.naturalWidth + ", Height: " + img.naturalHeight);
-                context.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
-                let imgDataURL = canvas.toDataURL();
-               // console.log(imgDataURL);
-
-                if (doc === ""){
-                    doc = imgDataURL;
-                }else{
-                    doc = doc + "\n" + imgDataURL;
+function saveAsPDF() {
+    try {
+        console.log("Starting PDF generation process...");
+        
+        // Create print styles
+        const printStyles = document.createElement('style');
+        printStyles.textContent = `
+            @media print {
+                body {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
                 }
-
+                * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+                img {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
             }
-        }
+        `;
+        document.head.appendChild(printStyles);
 
-        let anchorElement = document.createElement("a");
-        let file = new Blob([doc], {type: 'text/plain'});
+        // Show loading message
+        const loadingDiv = document.createElement('div');
+        loadingDiv.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 9999;
+            font-family: Arial, sans-serif;
+        `;
+        loadingDiv.innerHTML = 'Preparing PDF... Please wait...';
+        document.body.appendChild(loadingDiv);
 
-        url = URL.createObjectURL(file);
-        anchorElement.href = url;
-        anchorElement.download = pdfDocumentName + ".PDF_DataFile";
-        document.body.appendChild(anchorElement);
-        anchorElement.click();
+        // Wait a bit for styles to apply
+        setTimeout(() => {
+            // Remove loading message
+            document.body.removeChild(loadingDiv);
+            
+            // Open print dialog
+            window.print();
+            
+            // Remove print styles after printing
+            document.head.removeChild(printStyles);
+            
+            console.log("PDF generation completed!");
+        }, 1000);
+        
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+        
+        // Show error message
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 9999;
+            font-family: Arial, sans-serif;
+        `;
+        errorDiv.innerHTML = 'Error generating PDF. Please try again.';
+        document.body.appendChild(errorDiv);
+        
+        // Remove error message after 3 seconds
+        setTimeout(() => {
+            document.body.removeChild(errorDiv);
+        }, 3000);
     }
+}
 
-    let allElements = document.querySelectorAll("*");
-    let chosenElement;
-    let heightOfScrollableElement = 0;
-
-    for (i = 0; i < allElements.length; i++) {
-        if ( allElements[i].scrollHeight>=allElements[i].clientHeight){
-            if (heightOfScrollableElement < allElements[i].scrollHeight){
-                //console.log(allElements[i]);
-                //console.log(allElements[i].scrollHeight);
-                heightOfScrollableElement = allElements[i].scrollHeight;
-                chosenElement = allElements[i];
-            }
+// Add a floating button to trigger PDF generation
+function addPDFButton() {
+    try {
+        console.log("Creating PDF button...");
+        
+        // Check if button already exists
+        const existingButton = document.getElementById('pdf-download-button');
+        if (existingButton) {
+            console.log("PDF button already exists, removing old one...");
+            existingButton.remove();
         }
+        
+        const button = document.createElement('button');
+        button.id = 'pdf-download-button';
+        button.innerHTML = 'Save as PDF';
+        button.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 9999;
+            font-family: Arial, sans-serif;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        `;
+        
+        button.onmouseover = () => {
+            button.style.background = '#45a049';
+            button.style.transform = 'scale(1.05)';
+        };
+        
+        button.onmouseout = () => {
+            button.style.background = '#4CAF50';
+            button.style.transform = 'scale(1)';
+        };
+        
+        button.onclick = saveAsPDF;
+        
+        document.body.appendChild(button);
+        console.log("PDF button added successfully");
+        
+    } catch (error) {
+        console.error("Error adding PDF button:", error);
     }
+}
 
-    if (chosenElement.scrollHeight > chosenElement.clientHeight){
-        console.log("Auto Scroll");
-
-        let scrollDistance = Math.round(chosenElement.clientHeight/2);
-        //console.log("scrollHeight: " + chosenElement.scrollHeight);
-        //console.log("scrollDistance: " + scrollDistance);
-
-        let loopCounter = 0;
-        function myLoop(remainingHeightToScroll, scrollToLocation) {
-            loopCounter = loopCounter+1;
-            console.log(loopCounter);
-
-            setTimeout(function() {
-                if (remainingHeightToScroll === 0){
-                    scrollToLocation = scrollDistance;
-                    chosenElement.scrollTo(0, scrollToLocation);
-                    remainingHeightToScroll = chosenElement.scrollHeight - scrollDistance;
-                }else{
-                    scrollToLocation = scrollToLocation + scrollDistance ;
-                    chosenElement.scrollTo(0, scrollToLocation);
-                    remainingHeightToScroll = remainingHeightToScroll - scrollDistance;
-                }
-
-                if (remainingHeightToScroll >= chosenElement.clientHeight){
-                    myLoop(remainingHeightToScroll, scrollToLocation)
-                }else{
-                    setTimeout(function() {
-                        generatePDF_DataFile();
-                    }, 1500)
-                }
-
-            }, 400)
+// Function to initialize the PDF functionality
+function initializePDFDownloader() {
+    try {
+        console.log("Initializing PDF downloader...");
+        
+        if (document.readyState === 'loading') {
+            console.log("Document still loading, waiting for DOMContentLoaded...");
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log("DOMContentLoaded event fired, adding PDF button...");
+                addPDFButton();
+            });
+        } else {
+            console.log("Document already loaded, adding PDF button...");
+            addPDFButton();
         }
-        myLoop(0, 0);
-
-    }else{
-        console.log("No Scroll");
-        setTimeout(function() {
-            generatePDF_DataFile();
-        }, 1500)
+    } catch (error) {
+        console.error("Error initializing PDF downloader:", error);
     }
+}
+
+// Start the initialization
+initializePDFDownloader();
