@@ -1,126 +1,205 @@
-//
-Created on Tue Sep 4 12: 53: 35 2020
-
+/*
+Created on Tue Sep 4 12:53:35 2020
 @author: Erdos1729
-//
+*/
 
-let jspdf = document.createElement("script");
-jspdf.onload = function () {
-    let pdfDocumentName = "Document";
-    let doc;
+// Configuration
+const CONFIG = {
+    documentName: "Document", // Change this to your desired filename
+    maxRetries: 3,
+    retryDelay: 1000,
+    scrollDelay: 500,
+    processingDelay: 1500,
+    maxPages: 20,
+    scaleFactor: 1.335
+};
 
-    function generatePDF (){
-        let imgTags = document.getElementsByTagName("img");
-        let checkURLString = "blob:https://drive.google.com/";
+// Utility functions
+function showMessage(message, type = 'info') {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: ${type === 'error' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.8)'};
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        z-index: 9999;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    `;
+    div.innerHTML = message;
+    document.body.appendChild(div);
+    return div;
+}
+
+function removeMessage(div) {
+    if (div && div.parentNode) {
+        div.parentNode.removeChild(div);
+    }
+}
+
+// Load jsPDF library
+function loadJSPDF() {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.debug.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.body.appendChild(script);
+    });
+}
+
+// Main PDF generation function
+async function generatePDF() {
+    const loadingDiv = showMessage('Preparing PDF... Please wait...');
+    let retryCount = 0;
+
+    try {
+        console.log("Starting PDF generation process...");
+        
+        const imgTags = document.getElementsByTagName("img");
+        const checkURLString = "blob:https://drive.google.com/";
         let validImgTagCounter = 0;
-        for (i = 0; i < imgTags.length; i++) {
+        let doc = null;
 
-            if (imgTags[i].src.substring(0, checkURLString.length) === checkURLString){
-                validImgTagCounter = validImgTagCounter + 1;
-                //console.log(imgTags[i].src);
-                let img = imgTags[i];
+        // Count valid images
+        for (let i = 0; i < imgTags.length; i++) {
+            if (imgTags[i].src.substring(0, checkURLString.length) === checkURLString) {
+                validImgTagCounter++;
+            }
+        }
 
-                let canvas = document.createElement('canvas');
-                let context = canvas.getContext("2d");
+        if (validImgTagCounter === 0) {
+            throw new Error("No valid images found on the page!");
+        }
+
+        if (validImgTagCounter > CONFIG.maxPages) {
+            throw new Error(`This document has more than ${CONFIG.maxPages} pages. Please use Download Script 1 instead.`);
+        }
+
+        // Process each valid image
+        for (let i = 0; i < imgTags.length; i++) {
+            if (imgTags[i].src.substring(0, checkURLString.length) === checkURLString) {
+                const img = imgTags[i];
+                console.log(`Processing image ${i + 1}/${validImgTagCounter}`);
+
+                // Create canvas and draw image
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext("2d");
                 canvas.width = img.naturalWidth;
                 canvas.height = img.naturalHeight;
-                //console.log("Width: " + img.naturalWidth + ", Height: " + img.naturalHeight);
                 context.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
-                let imgDataURL = canvas.toDataURL();
-               // console.log(imgDataURL);
+                const imgDataURL = canvas.toDataURL();
 
-                //let ratio;
-                let orientation;
-                if (img.naturalWidth > img.naturalHeight){
-                    //console.log("Landscape");
-                    orientation = "l";
-                    //ratio = img.naturalWidth/img.naturalHeight
-                }else {
-                    //console.log("Portrait");
-                    orientation = "p";
-                    //ratio = img.naturalWidth/img.naturalHeight
-                }
+                // Determine orientation and dimensions
+                const orientation = img.naturalWidth > img.naturalHeight ? "l" : "p";
+                const pageWidth = img.naturalWidth * CONFIG.scaleFactor;
+                const pageHeight = img.naturalHeight * CONFIG.scaleFactor;
 
-                let scalefactor = 1.335;
-                let pageWidth = img.naturalWidth * scalefactor;
-                let pageHeight = img.naturalHeight * scalefactor;
-               //let imagexLeft = (pageWidth - img.naturalWidth)/2;
-               //let imagexTop = (pageHeight - img.naturalHeight)/2;
-                if (validImgTagCounter === 1){
+                // Create or add to PDF
+                if (!doc) {
                     doc = new jsPDF({
                         orientation: orientation,
                         unit: "px",
                         format: [pageWidth, pageHeight],
                     });
-                    doc.addImage(imgDataURL, "PNG", 0, 0, img.naturalWidth, img.naturalHeight);
-                }else{
-                    doc.addPage([pageWidth, pageHeight] , orientation);
-                    doc.addImage(imgDataURL, "PNG", 0, 0, img.naturalWidth, img.naturalHeight);
+                } else {
+                    doc.addPage([pageWidth, pageHeight], orientation);
+                }
+
+                doc.addImage(imgDataURL, "PNG", 0, 0, img.naturalWidth, img.naturalHeight);
+            }
+        }
+
+        // Save the PDF
+        const filename = CONFIG.documentName + ".pdf";
+        doc.save(filename);
+        
+        removeMessage(loadingDiv);
+        showMessage('PDF generation completed!', 'info');
+        console.log("PDF generation completed!");
+
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+        removeMessage(loadingDiv);
+        showMessage(error.message || 'Error generating PDF. Please try again.', 'error');
+        
+        // Retry logic
+        if (retryCount < CONFIG.maxRetries) {
+            retryCount++;
+            console.log(`Retrying... Attempt ${retryCount}/${CONFIG.maxRetries}`);
+            setTimeout(generatePDF, CONFIG.retryDelay);
+        }
+    }
+}
+
+// Scroll handling function
+async function handleScroll(chosenElement) {
+    const scrollDistance = Math.round(chosenElement.clientHeight / 2);
+    let remainingHeightToScroll = chosenElement.scrollHeight;
+    let scrollToLocation = 0;
+    let loopCounter = 0;
+
+    while (remainingHeightToScroll >= chosenElement.clientHeight) {
+        loopCounter++;
+        console.log(`Scroll iteration ${loopCounter}`);
+
+        await new Promise(resolve => setTimeout(resolve, CONFIG.scrollDelay));
+        
+        scrollToLocation += scrollDistance;
+        chosenElement.scrollTo(0, scrollToLocation);
+        remainingHeightToScroll -= scrollDistance;
+    }
+
+    // Final scroll to top
+    chosenElement.scrollTo(0, 0);
+    
+    // Wait for content to settle
+    await new Promise(resolve => setTimeout(resolve, CONFIG.processingDelay));
+    
+    // Generate PDF
+    generatePDF();
+}
+
+// Initialize the PDF generation process
+async function initializePDFGeneration() {
+    try {
+        console.log("Initializing PDF generation...");
+        
+        // Load jsPDF library
+        await loadJSPDF();
+        
+        // Find scrollable element
+        const allElements = document.querySelectorAll("*");
+        let chosenElement = null;
+        let heightOfScrollableElement = 0;
+
+        for (let i = 0; i < allElements.length; i++) {
+            if (allElements[i].scrollHeight >= allElements[i].clientHeight) {
+                if (heightOfScrollableElement < allElements[i].scrollHeight) {
+                    heightOfScrollableElement = allElements[i].scrollHeight;
+                    chosenElement = allElements[i];
                 }
             }
         }
 
-        pdfDocumentName = pdfDocumentName + ".pdf";
-       doc.save(pdfDocumentName);
-    }
-
-    let allElements = document.querySelectorAll("*");
-    let chosenElement;
-    let heightOfScrollableElement = 0;
-
-    for (i = 0; i < allElements.length; i++) {
-        if ( allElements[i].scrollHeight>=allElements[i].clientHeight){
-            if (heightOfScrollableElement < allElements[i].scrollHeight){
-                //console.log(allElements[i]);
-                //console.log(allElements[i].scrollHeight);
-                heightOfScrollableElement = allElements[i].scrollHeight;
-                chosenElement = allElements[i];
-            }
+        if (chosenElement && chosenElement.scrollHeight > chosenElement.clientHeight) {
+            console.log("Found scrollable element, starting scroll process...");
+            await handleScroll(chosenElement);
+        } else {
+            console.log("No scroll needed, generating PDF directly...");
+            await generatePDF();
         }
+
+    } catch (error) {
+        console.error("Error initializing PDF generation:", error);
+        showMessage('Error initializing PDF generation. Please refresh the page.', 'error');
     }
+}
 
-    if (chosenElement.scrollHeight > chosenElement.clientHeight){
-        console.log("Auto Scroll");
-
-        let scrollDistance = Math.round(chosenElement.clientHeight/2);
-        //console.log("scrollHeight: " + chosenElement.scrollHeight);
-        //console.log("scrollDistance: " + scrollDistance);
-
-        let loopCounter = 0;
-        function myLoop(remainingHeightToScroll, scrollToLocation) {
-            loopCounter = loopCounter+1;
-            console.log(loopCounter);
-
-            setTimeout(function() {
-                if (remainingHeightToScroll === 0){
-                    scrollToLocation = scrollDistance;
-                    chosenElement.scrollTo(0, scrollToLocation);
-                    remainingHeightToScroll = chosenElement.scrollHeight - scrollDistance;
-                }else{
-                    scrollToLocation = scrollToLocation + scrollDistance ;
-                    chosenElement.scrollTo(0, scrollToLocation);
-                    remainingHeightToScroll = remainingHeightToScroll - scrollDistance;
-                }
-
-                if (remainingHeightToScroll >= chosenElement.clientHeight){
-                    myLoop(remainingHeightToScroll, scrollToLocation)
-                }else{
-                    setTimeout(function() {
-                        generatePDF();
-                    }, 1500)
-                }
-
-            }, 500)
-        }
-        myLoop(0, 0);
-
-    }else{
-        console.log("No Scroll");
-        setTimeout(function() {
-            generatePDF();
-        }, 1500)
-    }
-
-};
-jspdf.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.5.3/jspdf.debug.js';
-document.body.appendChild(jspdf);
+// Start the initialization
+initializePDFGeneration();

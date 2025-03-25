@@ -3,7 +3,48 @@ Created on Tue Sep 4 12:53:35 2020
 @author: Erdos1729
 */
 
-function saveAsPDF() {
+// Configuration
+const CONFIG = {
+    documentName: "Document", // Change this to your desired filename
+    maxRetries: 3,
+    retryDelay: 1000,
+    scrollDelay: 500,
+    processingDelay: 1500
+};
+
+// Utility functions
+function showMessage(message, type = 'info') {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: ${type === 'error' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 0, 0, 0.8)'};
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        z-index: 9999;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    `;
+    div.innerHTML = message;
+    document.body.appendChild(div);
+    return div;
+}
+
+function removeMessage(div) {
+    if (div && div.parentNode) {
+        div.parentNode.removeChild(div);
+    }
+}
+
+// Main PDF generation function
+async function saveAsPDF() {
+    const loadingDiv = showMessage('Preparing PDF... Please wait...');
+    let retryCount = 0;
+
     try {
         console.log("Starting PDF generation process...");
         
@@ -23,65 +64,40 @@ function saveAsPDF() {
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                 }
+                @page {
+                    margin: 0;
+                    size: auto;
+                }
             }
         `;
         document.head.appendChild(printStyles);
 
-        // Show loading message
-        const loadingDiv = document.createElement('div');
-        loadingDiv.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            z-index: 9999;
-            font-family: Arial, sans-serif;
-        `;
-        loadingDiv.innerHTML = 'Preparing PDF... Please wait...';
-        document.body.appendChild(loadingDiv);
-
-        // Wait a bit for styles to apply
-        setTimeout(() => {
-            // Remove loading message
-            document.body.removeChild(loadingDiv);
-            
-            // Open print dialog
-            window.print();
-            
-            // Remove print styles after printing
-            document.head.removeChild(printStyles);
-            
-            console.log("PDF generation completed!");
-        }, 1000);
+        // Wait for styles to apply
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Remove loading message
+        removeMessage(loadingDiv);
+        
+        // Open print dialog
+        window.print();
+        
+        // Remove print styles after printing
+        document.head.removeChild(printStyles);
+        
+        console.log("PDF generation completed!");
+        showMessage('PDF generation completed! You can now save the PDF.', 'info');
         
     } catch (error) {
         console.error("Error generating PDF:", error);
+        removeMessage(loadingDiv);
+        showMessage('Error generating PDF. Please try again.', 'error');
         
-        // Show error message
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 0, 0, 0.8);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            z-index: 9999;
-            font-family: Arial, sans-serif;
-        `;
-        errorDiv.innerHTML = 'Error generating PDF. Please try again.';
-        document.body.appendChild(errorDiv);
-        
-        // Remove error message after 3 seconds
-        setTimeout(() => {
-            document.body.removeChild(errorDiv);
-        }, 3000);
+        // Retry logic
+        if (retryCount < CONFIG.maxRetries) {
+            retryCount++;
+            console.log(`Retrying... Attempt ${retryCount}/${CONFIG.maxRetries}`);
+            setTimeout(saveAsPDF, CONFIG.retryDelay);
+        }
     }
 }
 
@@ -104,7 +120,7 @@ function addPDFButton() {
             position: fixed;
             bottom: 20px;
             right: 20px;
-            padding: 10px 20px;
+            padding: 12px 24px;
             background: #4CAF50;
             color: white;
             border: none;
@@ -112,6 +128,8 @@ function addPDFButton() {
             cursor: pointer;
             z-index: 9999;
             font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             transition: all 0.3s ease;
         `;
@@ -119,11 +137,13 @@ function addPDFButton() {
         button.onmouseover = () => {
             button.style.background = '#45a049';
             button.style.transform = 'scale(1.05)';
+            button.style.boxShadow = '0 4px 8px rgba(0,0,0,0.3)';
         };
         
         button.onmouseout = () => {
             button.style.background = '#4CAF50';
             button.style.transform = 'scale(1)';
+            button.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
         };
         
         button.onclick = saveAsPDF;
@@ -133,6 +153,7 @@ function addPDFButton() {
         
     } catch (error) {
         console.error("Error adding PDF button:", error);
+        showMessage('Error adding PDF button. Please refresh the page.', 'error');
     }
 }
 
@@ -141,6 +162,7 @@ function initializePDFDownloader() {
     try {
         console.log("Initializing PDF downloader...");
         
+        // Wait for page to be fully loaded
         if (document.readyState === 'loading') {
             console.log("Document still loading, waiting for DOMContentLoaded...");
             document.addEventListener('DOMContentLoaded', () => {
@@ -153,6 +175,7 @@ function initializePDFDownloader() {
         }
     } catch (error) {
         console.error("Error initializing PDF downloader:", error);
+        showMessage('Error initializing PDF downloader. Please refresh the page.', 'error');
     }
 }
 
